@@ -1,0 +1,10 @@
+# C++ build output
+build/
+cmake-build-*/
+cpp_core/third_party/
+
+# Rust build output
+target/
+
+# macOS
+.DS_Store
