@@ -18,3 +18,18 @@ if(MUJOCO_INCLUDE_DIR AND MUJOCO_LIBRARY AND EXISTS "${MUJOCO_LIBRARY}")
 else()
     message(WARNING "MuJoCo not found (MUJOCO_INCLUDE_DIR/MUJOCO_LIBRARY unset) - skipping mujoco_smoke_test target")
 endif()
+
+# --- ONNX Runtime ----------------------------------------------------------
+# FERRO_ONNXRUNTIME_DIR can be overridden on the command line for a non-Homebrew
+# install (e.g. a manual tarball extract on Linux/R11).
+if(APPLE AND NOT FERRO_ONNXRUNTIME_DIR)
+    set(FERRO_ONNXRUNTIME_DIR "/opt/homebrew/opt/onnxruntime")
+endif()
+
+if(FERRO_ONNXRUNTIME_DIR AND EXISTS "${FERRO_ONNXRUNTIME_DIR}")
+    find_package(onnxruntime CONFIG REQUIRED PATHS "${FERRO_ONNXRUNTIME_DIR}/lib/cmake/onnxruntime" NO_DEFAULT_PATH)
+    add_executable(onnxruntime_smoke_test src/onnxruntime_smoke_test.cpp)
+    target_link_libraries(onnxruntime_smoke_test PRIVATE onnxruntime::onnxruntime)
+else()
+    message(WARNING "ONNX Runtime not found (FERRO_ONNXRUNTIME_DIR unset) - skipping onnxruntime_smoke_test target")
+endif()
