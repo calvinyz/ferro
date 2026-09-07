@@ -8,3 +8,8 @@ target/
 
 # macOS
 .DS_Store
+
+# Python
+training/.venv/
+__pycache__/
+*.pyc
