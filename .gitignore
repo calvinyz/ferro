@@ -1,7 +1,9 @@
 # C++ build output
 build/
 cmake-build-*/
-cpp_core/third_party/
+
+# Vendored dependencies (downloaded via scripts/fetch_mujoco.sh)
+third_party/mujoco/
 
 # Rust build output
 target/
