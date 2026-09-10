@@ -1,39 +1,9 @@
+#include "mujoco_wrapper.h"
+
 #include <iostream>
 #include <mujoco/mujoco.h>
 #include <onnxruntime_cxx_api.h>
-
-class Model {
-    mjModel* m;
-public:
-    Model(const char* filename) {
-        char error[1024] = {};
-        m = mj_loadXML(filename, nullptr, error, 1024);
-        if (!m) throw std::runtime_error(std::string("Failed to load model: ") + error);
-        std::cout << "Loaded model with " << m->nq << " degrees of freedom\n";
-    }
-
-    ~Model() {
-        if (m) mj_deleteModel(m);
-    }
-
-    mjModel* get() const { return m; }
-    int nq() const { return m->nq; }
-};
-
-class Data {
-    mjData* d;
-public:
-    Data(const Model& model) {
-        d = mj_makeData(model.get());
-        if (!d) throw std::runtime_error("Failed to create data");
-    }
-
-    ~Data() {
-        if (d) mj_deleteData(d);
-    }
-
-    mjData* get() const { return d; }
-};
+#include <vector>
 
 int main() {
     const char* model_path = INVERTED_PENDULUM_PATH;
