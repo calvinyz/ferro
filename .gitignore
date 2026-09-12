@@ -2,8 +2,9 @@
 build/
 cmake-build-*/
 
-# Vendored dependencies (downloaded via scripts/fetch_mujoco.sh)
+# Vendored dependencies (downloaded via scripts/fetch_*.sh)
 third_party/mujoco/
+third_party/onnxruntime/
 
 # Rust build output
 target/
