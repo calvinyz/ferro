@@ -6,7 +6,7 @@ set -euo pipefail
 
 MUJOCO_VERSION="3.12.0"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENDOR_DIR="$REPO_ROOT/cpp_core/third_party/mujoco"
+VENDOR_DIR="$REPO_ROOT/third_party/mujoco"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
@@ -26,7 +26,11 @@ download_and_verify() {
     local asset="$1"
     curl -fsSL -o "$WORK_DIR/$asset" "$BASE_URL/$asset"
     curl -fsSL -o "$WORK_DIR/$asset.sha256" "$BASE_URL/$asset.sha256"
-    (cd "$WORK_DIR" && shasum -a 256 -c "$asset.sha256")
+    if command -v sha256sum >/dev/null 2>&1; then
+        (cd "$WORK_DIR" && sha256sum -c "$asset.sha256")
+    else
+        (cd "$WORK_DIR" && shasum -a 256 -c "$asset.sha256")
+    fi
 }
 
 rm -rf "$VENDOR_DIR"

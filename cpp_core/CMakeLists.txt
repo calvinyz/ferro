@@ -48,10 +48,8 @@ if(MUJOCO_INCLUDE_DIR AND MUJOCO_LIBRARY AND EXISTS "${MUJOCO_LIBRARY}")
     target_include_directories(mujoco_smoke_test PRIVATE "${MUJOCO_INCLUDE_DIR}")
     target_link_libraries(mujoco_smoke_test PRIVATE "${MUJOCO_LIBRARY}")
 
-    if(APPLE)
-        get_filename_component(FERRO_MUJOCO_LIBDIR "${MUJOCO_LIBRARY}" DIRECTORY)
-        set_target_properties(ferro_core mujoco_smoke_test PROPERTIES BUILD_RPATH "${FERRO_MUJOCO_LIBDIR}")
-    endif()
+    get_filename_component(FERRO_MUJOCO_LIBDIR "${MUJOCO_LIBRARY}" DIRECTORY)
+    set_target_properties(ferro_core mujoco_smoke_test PROPERTIES BUILD_RPATH "${FERRO_MUJOCO_LIBDIR}")
 else()
     message(FATAL_ERROR "MuJoCo not found. Run scripts/fetch_mujoco.sh, or set "
                          "-DMUJOCO_INCLUDE_DIR and -DMUJOCO_LIBRARY for a system install.")
@@ -60,24 +58,44 @@ endif()
 # --- ONNX Runtime ----------------------------------------------------------
 # FERRO_ONNXRUNTIME_DIR can be overridden on the command line for a non-Homebrew
 # install (e.g. a manual tarball extract on Linux/R11).
-if(APPLE AND NOT FERRO_ONNXRUNTIME_DIR)
-    # Try Homebrew first, then venv as fallback
-    if(EXISTS "/opt/homebrew/opt/onnxruntime")
+set(FERRO_ONNXRUNTIME_VENDORED OFF)
+if(NOT FERRO_ONNXRUNTIME_DIR)
+    # Vendored copy from scripts/fetch_onnxruntime.sh, else Homebrew on macOS.
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/onnxruntime")
+        set(FERRO_ONNXRUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/onnxruntime")
+        set(FERRO_ONNXRUNTIME_VENDORED ON)
+    elseif(APPLE AND EXISTS "/opt/homebrew/opt/onnxruntime")
         set(FERRO_ONNXRUNTIME_DIR "/opt/homebrew/opt/onnxruntime")
-    elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../training/.venv/lib/python3.12/site-packages/onnxruntime")
-        set(FERRO_ONNXRUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../training/.venv/lib/python3.12/site-packages/onnxruntime")
     endif()
 endif()
 
 if(FERRO_ONNXRUNTIME_DIR AND EXISTS "${FERRO_ONNXRUNTIME_DIR}")
     message(STATUS "ONNX Runtime: ${FERRO_ONNXRUNTIME_DIR}")
-    find_package(onnxruntime CONFIG REQUIRED PATHS "${FERRO_ONNXRUNTIME_DIR}/lib/cmake/onnxruntime" NO_DEFAULT_PATH)
+
+    if(FERRO_ONNXRUNTIME_VENDORED)
+        # The upstream release ships a CMake config that points at include/onnxruntime
+        # and lib64/, neither of which matches its own tarball, so declare the
+        # imported target directly instead of trusting it.
+        file(GLOB FERRO_ORT_LIB_CANDIDATES
+             "${FERRO_ONNXRUNTIME_DIR}/lib/libonnxruntime.so"
+             "${FERRO_ONNXRUNTIME_DIR}/lib/libonnxruntime.dylib")
+        list(GET FERRO_ORT_LIB_CANDIDATES 0 FERRO_ORT_LIB)
+        add_library(onnxruntime::onnxruntime SHARED IMPORTED)
+        set_target_properties(onnxruntime::onnxruntime PROPERTIES
+            IMPORTED_LOCATION "${FERRO_ORT_LIB}"
+            INTERFACE_INCLUDE_DIRECTORIES "${FERRO_ONNXRUNTIME_DIR}/include/onnxruntime")
+    else()
+        find_package(onnxruntime CONFIG REQUIRED PATHS "${FERRO_ONNXRUNTIME_DIR}/lib/cmake/onnxruntime" NO_DEFAULT_PATH)
+    endif()
 
     # Link ONNX Runtime to ferro_core
     target_link_libraries(ferro_core PRIVATE onnxruntime::onnxruntime)
 
     add_executable(onnxruntime_smoke_test src/onnxruntime_smoke_test.cpp)
     target_link_libraries(onnxruntime_smoke_test PRIVATE onnxruntime::onnxruntime)
+
+    set_property(TARGET ferro_core APPEND PROPERTY BUILD_RPATH "${FERRO_ONNXRUNTIME_DIR}/lib")
+    set_property(TARGET onnxruntime_smoke_test APPEND PROPERTY BUILD_RPATH "${FERRO_ONNXRUNTIME_DIR}/lib")
 else()
     message(FATAL_ERROR "ONNX Runtime not found. Install via Homebrew or set -DFERRA_ONNXRUNTIME_DIR=/path/to/onnxruntime")
 endif()
