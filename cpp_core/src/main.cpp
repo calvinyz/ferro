@@ -1,5 +1,6 @@
 #include "mujoco_wrapper.h"
 #include "latency.h"
+#include "realtime.h"
 
 #include <iostream>
 #include <mujoco/mujoco.h>
@@ -27,6 +28,20 @@ int main() {
         auto next_deadline = std::chrono::steady_clock::now();
         auto last_wake = next_deadline;
         int missed_deadlines = 0;
+
+        // computation/constraint are budgets for the work inside one period,
+        // sized off the measured tick_work p99 of roughly 0.6ms.
+        RealtimeParams rt = {
+            .period_ns = 20'000'000,
+            .computation_ns = 1'000'000,
+            .constraint_ns = 2'000'000,
+            .fifo_priority = 80,
+        };
+        if (request_realtime(rt)) {
+            std::cout << "real-time scheduling: " << realtime_backend() << "\n";
+        } else {
+            std::cout << "real-time scheduling refused, running at default priority\n";
+        }
 
         std::cout << "Stepping simulation " << num_steps << " times...\n";
         for (int i = 0; i < num_steps; i++) {
