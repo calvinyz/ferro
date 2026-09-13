@@ -7,6 +7,11 @@
 #include <cstdio>
 #include <thread>
 
+#if defined(__linux__)
+#include <pthread.h>
+#include <sched.h>
+#endif
+
 // Defined in rust_sidecar/src/lib.rs. SidecarStats stays opaque here so
 // TickRing remains the only type needing a two-sided layout contract.
 struct SidecarStats;
@@ -34,6 +39,15 @@ public:
           running(true),
           poll_interval(poll) {
         worker = std::thread([this] {
+            // std::thread inherits the creator's scheduling policy, and the
+            // control thread may be SCHED_FIFO by now. Telemetry must not
+            // compete with control, so drop back to normal scheduling.
+#if defined(__linux__)
+            sched_param normal{};
+            normal.sched_priority = 0;
+            pthread_setschedparam(pthread_self(), SCHED_OTHER, &normal);
+#endif
+
             while (running.load(std::memory_order_relaxed)) {
                 ferro_sidecar_drain(this->ring, stats);
                 std::this_thread::sleep_for(poll_interval);
