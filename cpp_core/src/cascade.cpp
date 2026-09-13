@@ -37,6 +37,7 @@ int main(int argc, char** argv) {
     const int control_us = (argc > 2) ? std::atoi(argv[2]) : 1000;   // 1 kHz
     const int policy_us = (argc > 3) ? std::atoi(argv[3]) : 40000;   // 25 Hz, the trained dt
     const int stall_ms = (argc > 4) ? std::atoi(argv[4]) : 0;        // injected policy stall
+    const int die_after = (argc > 5) ? std::atoi(argv[5]) : 0;       // policy exits after N cycles
 
     // Command older than this falls back rather than driving the actuator.
     const uint64_t max_age_ns = static_cast<uint64_t>(policy_us) * 1000 * 3;
@@ -73,6 +74,11 @@ int main(int argc, char** argv) {
         auto next = steady_clock::now();
 
         while (running.load(std::memory_order_relaxed)) {
+            if (die_after > 0 && cycle >= static_cast<uint64_t>(die_after)) {
+                std::printf("policy thread exiting after %llu cycles\n",
+                            (unsigned long long)cycle);
+                return;
+            }
             next += std::chrono::microseconds(policy_us);
 
             Target state{};
