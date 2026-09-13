@@ -164,6 +164,9 @@ if(CARGO_EXECUTABLE)
     add_dependencies(sidecar_link_test rust_sidecar_build)
     target_link_libraries(sidecar_link_test PRIVATE "${FERRO_RUST_LIB}" ${FERRO_RUST_SYS_LIBS})
 
+    add_executable(target_channel_test src/target_channel_test.cpp)
+    target_link_libraries(target_channel_test PRIVATE Threads::Threads)
+
     add_executable(ring_stress_test src/ring_stress_test.cpp)
     add_dependencies(ring_stress_test rust_sidecar_build)
     target_link_libraries(ring_stress_test PRIVATE
