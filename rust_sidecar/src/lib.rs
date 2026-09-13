@@ -18,18 +18,20 @@ pub unsafe extern "C" fn ferro_sidecar_pop(
     ring: *const record::TickRing,
     out: *mut record::TickRecord,
 ) -> bool {
-    let ring = unsafe { &*ring };
+    // Raw pointer for slots: a &TickRing would assert no concurrent mutation.
+    let head = unsafe { &(*ring).control.head };
+    let tail = unsafe { &(*ring).control.tail };
 
-    let t = ring.control.tail.load(std::sync::atomic::Ordering::Relaxed);
-    let h = ring.control.head.load(std::sync::atomic::Ordering::Acquire);
+    let t = tail.load(std::sync::atomic::Ordering::Relaxed);
+    let h = head.load(std::sync::atomic::Ordering::Acquire);
 
     if t == h {
         return false;
     }
 
-    let idx = (t % record::RING_CAPACITY as u64) as usize;
-    unsafe { std::ptr::write(out, ring.slots[idx]); }
+    let idx = (t & (record::RING_CAPACITY as u64 - 1)) as usize;
+    unsafe { std::ptr::copy_nonoverlapping(&raw const (*ring).slots[idx], out, 1) };
 
-    ring.control.tail.store(t + 1, std::sync::atomic::Ordering::Release);
+    tail.store(t + 1, std::sync::atomic::Ordering::Release);
     true
 }

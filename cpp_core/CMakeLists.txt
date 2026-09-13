@@ -135,9 +135,17 @@ if(CARGO_EXECUTABLE)
         set(FERRO_RUST_SYS_LIBS gcc_s util rt pthread m dl)
     endif()
 
+    find_package(Threads REQUIRED)
+
     add_executable(sidecar_link_test src/sidecar_link_test.cpp)
     add_dependencies(sidecar_link_test rust_sidecar_build)
     target_link_libraries(sidecar_link_test PRIVATE "${FERRO_RUST_LIB}" ${FERRO_RUST_SYS_LIBS})
+
+    add_executable(ring_stress_test src/ring_stress_test.cpp)
+    add_dependencies(ring_stress_test rust_sidecar_build)
+    target_link_libraries(ring_stress_test PRIVATE
+        "${FERRO_RUST_LIB}" ${FERRO_RUST_SYS_LIBS} Threads::Threads)
+
     message(STATUS "Rust sidecar: ${CARGO_EXECUTABLE} (${FERRO_CARGO_PROFILE})")
 else()
     message(WARNING "cargo not found, skipping Rust sidecar targets")
