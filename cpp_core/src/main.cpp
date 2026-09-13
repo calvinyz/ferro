@@ -20,8 +20,8 @@ int main(int argc, char** argv) {
     const char* model_path = INVERTED_PENDULUM_PATH;
     const char* policy_path = POLICY_PATH;
 
-    // > kRingCapacity exercises the drop path, since nothing drains the ring
     const int num_steps = (argc > 1) ? std::atoi(argv[1]) : 500;
+    const int period_us = (argc > 2) ? std::atoi(argv[2]) : 20000;  // 50 Hz
 
     Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "ferro");
     Ort::Session session(env, policy_path, Ort::SessionOptions{});
@@ -40,18 +40,20 @@ int main(int argc, char** argv) {
         LatencyRecorder wake_lateness(num_steps);
         LatencyRecorder telemetry(num_steps);
 
-        const auto target_period = std::chrono::microseconds(20000);  // 50 Hz
+        const auto target_period = std::chrono::microseconds(period_us);
         auto next_deadline = steady_clock::now();
         auto last_wake = next_deadline;
 
         int missed_deadlines = 0;
         int dropped_count = 0;
 
-        // budgets sized off the measured tick_work p99, roughly 0.6ms
+        // budgets sized off the measured tick_work p99 of roughly 0.6ms, and
+        // clamped so a short period does not ask for more than it has
+        const int64_t period_ns = static_cast<int64_t>(period_us) * 1000;
         RealtimeParams rt = {
-            .period_ns = 20'000'000,
-            .computation_ns = 1'000'000,
-            .constraint_ns = 2'000'000,
+            .period_ns = period_ns,
+            .computation_ns = std::min<int64_t>(1'000'000, period_ns / 4),
+            .constraint_ns = std::min<int64_t>(2'000'000, period_ns / 2),
             .fifo_priority = 80,
         };
 

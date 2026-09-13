@@ -94,8 +94,20 @@ if(FERRO_ONNXRUNTIME_DIR AND EXISTS "${FERRO_ONNXRUNTIME_DIR}")
     add_executable(onnxruntime_smoke_test src/onnxruntime_smoke_test.cpp)
     target_link_libraries(onnxruntime_smoke_test PRIVATE onnxruntime::onnxruntime)
 
+    add_executable(ferro_eval src/eval.cpp)
+    target_include_directories(ferro_eval PRIVATE "${MUJOCO_INCLUDE_DIR}")
+    target_link_libraries(ferro_eval PRIVATE "${MUJOCO_LIBRARY}" onnxruntime::onnxruntime)
+    target_compile_definitions(ferro_eval PRIVATE
+        INVERTED_PENDULUM_PATH="${INVERTED_PENDULUM_PATH}"
+        POLICY_PATH="${POLICY_PATH}"
+    )
+
     set_property(TARGET ferro_core APPEND PROPERTY BUILD_RPATH "${FERRO_ONNXRUNTIME_DIR}/lib")
     set_property(TARGET onnxruntime_smoke_test APPEND PROPERTY BUILD_RPATH "${FERRO_ONNXRUNTIME_DIR}/lib")
+    set_property(TARGET ferro_eval APPEND PROPERTY BUILD_RPATH "${FERRO_ONNXRUNTIME_DIR}/lib")
+    if(APPLE)
+        set_property(TARGET ferro_eval APPEND PROPERTY BUILD_RPATH "${FERRO_MUJOCO_LIBDIR}")
+    endif()
 else()
     message(FATAL_ERROR "ONNX Runtime not found. Install via Homebrew or set -DFERRA_ONNXRUNTIME_DIR=/path/to/onnxruntime")
 endif()
