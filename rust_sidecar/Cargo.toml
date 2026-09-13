@@ -3,4 +3,9 @@ name = "ferro_sidecar"
 version = "0.1.0"
 edition = "2024"
 
+# staticlib is what cpp_core links against; rlib lets the bin target reuse it.
+[lib]
+name = "ferro_sidecar"
+crate-type = ["staticlib", "rlib"]
+
 [dependencies]

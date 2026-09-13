@@ -99,3 +99,46 @@ if(FERRO_ONNXRUNTIME_DIR AND EXISTS "${FERRO_ONNXRUNTIME_DIR}")
 else()
     message(FATAL_ERROR "ONNX Runtime not found. Install via Homebrew or set -DFERRA_ONNXRUNTIME_DIR=/path/to/onnxruntime")
 endif()
+
+# --- Rust sidecar ----------------------------------------------------------
+# Builds the Rust crate as a staticlib and links it in. cargo is often not on
+# PATH in a GUI-launched build, so search the usual install locations too.
+find_program(CARGO_EXECUTABLE cargo
+    HINTS "$ENV{HOME}/.cargo/bin" "/opt/homebrew/opt/rustup/bin")
+
+if(CARGO_EXECUTABLE)
+    set(FERRO_RUST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../rust_sidecar")
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(FERRO_CARGO_FLAGS "")
+        set(FERRO_CARGO_PROFILE debug)
+    else()
+        set(FERRO_CARGO_FLAGS --release)
+        set(FERRO_CARGO_PROFILE release)
+    endif()
+
+    set(FERRO_RUST_LIB "${FERRO_RUST_DIR}/target/${FERRO_CARGO_PROFILE}/libferro_sidecar.a")
+    file(GLOB FERRO_RUST_SOURCES "${FERRO_RUST_DIR}/src/*.rs")
+
+    add_custom_command(
+        OUTPUT "${FERRO_RUST_LIB}"
+        COMMAND "${CARGO_EXECUTABLE}" build ${FERRO_CARGO_FLAGS}
+        WORKING_DIRECTORY "${FERRO_RUST_DIR}"
+        DEPENDS ${FERRO_RUST_SOURCES} "${FERRO_RUST_DIR}/Cargo.toml"
+        COMMENT "Building Rust sidecar staticlib"
+        VERBATIM)
+    add_custom_target(rust_sidecar_build DEPENDS "${FERRO_RUST_LIB}")
+
+    # Native libs the staticlib needs, per `rustc --print native-static-libs`.
+    # macOS reports only -lSystem -lc -lm, all implicit; Linux needs the rest.
+    if(NOT APPLE AND UNIX)
+        set(FERRO_RUST_SYS_LIBS gcc_s util rt pthread m dl)
+    endif()
+
+    add_executable(sidecar_link_test src/sidecar_link_test.cpp)
+    add_dependencies(sidecar_link_test rust_sidecar_build)
+    target_link_libraries(sidecar_link_test PRIVATE "${FERRO_RUST_LIB}" ${FERRO_RUST_SYS_LIBS})
+    message(STATUS "Rust sidecar: ${CARGO_EXECUTABLE} (${FERRO_CARGO_PROFILE})")
+else()
+    message(WARNING "cargo not found, skipping Rust sidecar targets")
+endif()
