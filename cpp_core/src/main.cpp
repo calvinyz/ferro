@@ -1,6 +1,7 @@
 #include "mujoco_wrapper.h"
 #include "latency.h"
 #include "realtime.h"
+#include "sidecar.h"
 #include "tick_record.h"
 
 #include <algorithm>
@@ -66,6 +67,8 @@ int main(int argc, char** argv) {
         ring.control.capacity = kRingCapacity;
         ring.control.record_size = sizeof(TickRecord);
         ring.control.obs_dim = kObsDim;
+
+        SidecarConsumer sidecar(&ring);
 
         std::cout << "Stepping simulation " << num_steps << " times...\n";
 
@@ -158,6 +161,9 @@ int main(int argc, char** argv) {
 
         std::cout << "missed deadlines: " << missed_deadlines << " / " << num_steps << "\n";
         std::cout << "dropped records: " << dropped_count << " / " << num_steps << "\n";
+
+        sidecar.stop();
+        sidecar.print_summary();
     }
 
     return 0;

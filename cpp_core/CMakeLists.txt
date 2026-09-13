@@ -143,6 +143,11 @@ if(CARGO_EXECUTABLE)
 
     find_package(Threads REQUIRED)
 
+    # ferro_core runs the consumer thread, so it needs the staticlib too.
+    add_dependencies(ferro_core rust_sidecar_build)
+    target_link_libraries(ferro_core PRIVATE
+        "${FERRO_RUST_LIB}" ${FERRO_RUST_SYS_LIBS} Threads::Threads)
+
     add_executable(sidecar_link_test src/sidecar_link_test.cpp)
     add_dependencies(sidecar_link_test rust_sidecar_build)
     target_link_libraries(sidecar_link_test PRIVATE "${FERRO_RUST_LIB}" ${FERRO_RUST_SYS_LIBS})
