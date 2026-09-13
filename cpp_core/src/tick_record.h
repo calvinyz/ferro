@@ -59,3 +59,21 @@ inline void validate_obs_dim(size_t actual) {
                                  " does not match kObsDim " + std::to_string(kObsDim));
     }
 }
+
+// Producer side (this process). head/tail are unbounded counters, wrapped
+// only when indexing into slots, so head == tail is unambiguously empty and
+// head - tail == kRingCapacity is unambiguously full.
+inline bool tick_ring_push(TickRing* ring, const TickRecord& rec) {
+    uint64_t h = ring->control.head.load(std::memory_order_relaxed);
+    uint64_t t = ring->control.tail.load(std::memory_order_acquire);
+
+    if (h - t >= kRingCapacity) {
+        return false;
+    }
+
+    uint32_t idx = h % kRingCapacity;
+    ring->slots[idx] = rec;
+
+    ring->control.head.store(h + 1, std::memory_order_release);
+    return true;
+}
