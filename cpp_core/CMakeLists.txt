@@ -1,3 +1,5 @@
+find_package(Threads REQUIRED)
+
 # --- MuJoCo ---------------------------------------------------------------
 # Default: the vendored copy in third_party/mujoco/ (shared with rust_sidecar).
 # Override for a system install:
@@ -93,6 +95,19 @@ if(FERRO_ONNXRUNTIME_DIR AND EXISTS "${FERRO_ONNXRUNTIME_DIR}")
 
     add_executable(onnxruntime_smoke_test src/onnxruntime_smoke_test.cpp)
     target_link_libraries(onnxruntime_smoke_test PRIVATE onnxruntime::onnxruntime)
+
+    add_executable(ferro_cascade src/cascade.cpp)
+    target_include_directories(ferro_cascade PRIVATE "${MUJOCO_INCLUDE_DIR}")
+    target_link_libraries(ferro_cascade PRIVATE
+        "${MUJOCO_LIBRARY}" onnxruntime::onnxruntime Threads::Threads)
+    target_compile_definitions(ferro_cascade PRIVATE
+        INVERTED_PENDULUM_PATH="${INVERTED_PENDULUM_PATH}"
+        POLICY_PATH="${POLICY_PATH}"
+    )
+    set_property(TARGET ferro_cascade APPEND PROPERTY BUILD_RPATH "${FERRO_ONNXRUNTIME_DIR}/lib")
+    if(APPLE)
+        set_property(TARGET ferro_cascade APPEND PROPERTY BUILD_RPATH "${FERRO_MUJOCO_LIBDIR}")
+    endif()
 
     add_executable(ferro_eval src/eval.cpp)
     target_include_directories(ferro_eval PRIVATE "${MUJOCO_INCLUDE_DIR}")
