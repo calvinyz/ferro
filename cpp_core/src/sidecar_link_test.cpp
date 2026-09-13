@@ -5,8 +5,15 @@
 #include <cstring>
 
 // Defined in rust_sidecar/src/lib.rs.
+struct SidecarStats;
 extern "C" uint64_t ferro_sidecar_ring_size();
 extern "C" bool ferro_sidecar_pop(const TickRing* ring, TickRecord* out);
+extern "C" SidecarStats* ferro_sidecar_stats_new();
+extern "C" void ferro_sidecar_stats_free(SidecarStats* stats);
+extern "C" void ferro_sidecar_stats_print(const SidecarStats* stats);
+extern "C" uint64_t ferro_sidecar_stats_popped(const SidecarStats* stats);
+extern "C" uint64_t ferro_sidecar_stats_dropped(const SidecarStats* stats);
+extern "C" uint64_t ferro_sidecar_drain(const TickRing* ring, SidecarStats* stats);
 
 int main() {
     uint64_t rust_size = ferro_sidecar_ring_size();
@@ -67,5 +74,47 @@ int main() {
     }
 
     std::printf("round trip OK\n");
+
+    // Drain with a deliberate hole in the tick sequence. The consumer infers
+    // producer drops from the gap rather than from a shared counter.
+    const uint64_t ticks[] = {0, 1, 2, 7};
+    for (uint64_t t : ticks) {
+        TickRecord r{};
+        r.tick = t;
+        r.inference_ns = 100;
+        r.tick_work_ns = 200;
+        if (!tick_ring_push(&ring, r)) {
+            std::printf("push failed on tick %llu\n", static_cast<unsigned long long>(t));
+            return 1;
+        }
+    }
+
+    SidecarStats* stats = ferro_sidecar_stats_new();
+    uint64_t consumed = ferro_sidecar_drain(&ring, stats);
+
+    // Rust's stdout buffers separately from C's, so flush before handing the
+    // terminal to the other side or the two interleave out of order.
+    std::fflush(stdout);
+    ferro_sidecar_stats_print(stats);
+
+    uint64_t popped = ferro_sidecar_stats_popped(stats);
+    uint64_t dropped = ferro_sidecar_stats_dropped(stats);
+    ferro_sidecar_stats_free(stats);
+
+    if (consumed != 4 || popped != 4) {
+        std::printf("MISMATCH: expected 4 records, drained %llu / counted %llu\n",
+                    static_cast<unsigned long long>(consumed),
+                    static_cast<unsigned long long>(popped));
+        return 1;
+    }
+
+    // Ticks 3 through 6 never arrived.
+    if (dropped != 4) {
+        std::printf("MISMATCH: expected 4 inferred drops, got %llu\n",
+                    static_cast<unsigned long long>(dropped));
+        return 1;
+    }
+
+    std::printf("drain + drop inference OK\n");
     return 0;
 }

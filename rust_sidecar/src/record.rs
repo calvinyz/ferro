@@ -7,7 +7,7 @@ pub const RING_CAPACITY: usize = 1024;
 pub const OBS_DIM: usize = 4;
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct TickRecord {
     pub tick: u64,
     pub timestamp_ns: u64,

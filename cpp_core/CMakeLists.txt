@@ -120,9 +120,15 @@ if(CARGO_EXECUTABLE)
     set(FERRO_RUST_LIB "${FERRO_RUST_DIR}/target/${FERRO_CARGO_PROFILE}/libferro_sidecar.a")
     file(GLOB FERRO_RUST_SOURCES "${FERRO_RUST_DIR}/src/*.rs")
 
+    # Finding cargo is not enough: the rustup proxy shells out to rustc, so its
+    # own directory has to be on PATH or the build fails with "could not
+    # execute process `rustc -vV`".
+    get_filename_component(FERRO_CARGO_DIR "${CARGO_EXECUTABLE}" DIRECTORY)
+
     add_custom_command(
         OUTPUT "${FERRO_RUST_LIB}"
-        COMMAND "${CARGO_EXECUTABLE}" build ${FERRO_CARGO_FLAGS}
+        COMMAND "${CMAKE_COMMAND}" -E env "PATH=${FERRO_CARGO_DIR}:$ENV{PATH}"
+                "${CARGO_EXECUTABLE}" build ${FERRO_CARGO_FLAGS}
         WORKING_DIRECTORY "${FERRO_RUST_DIR}"
         DEPENDS ${FERRO_RUST_SOURCES} "${FERRO_RUST_DIR}/Cargo.toml"
         COMMENT "Building Rust sidecar staticlib"
