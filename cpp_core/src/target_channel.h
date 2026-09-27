@@ -8,11 +8,12 @@
 // wants the newest command, and a FIFO would deliver stale ones after a stall.
 // Readers never block, so a slow policy cannot stretch a control tick.
 
-constexpr uint32_t kMaxTargetDim = 8;
+constexpr uint32_t kMaxTargetDim = 32;
 
 struct Target {
     uint64_t policy_tick;
     uint64_t published_ns;
+    uint64_t compute_ns;  // inference time that produced this command
     float value[kMaxTargetDim];
 };
 

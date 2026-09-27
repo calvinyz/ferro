@@ -103,10 +103,25 @@ if(FERRO_ONNXRUNTIME_DIR AND EXISTS "${FERRO_ONNXRUNTIME_DIR}")
     target_compile_definitions(ferro_cascade PRIVATE
         INVERTED_PENDULUM_PATH="${INVERTED_PENDULUM_PATH}"
         POLICY_PATH="${POLICY_PATH}"
+        PUSHER_MODEL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../third_party/models/pusher.xml"
+        PUSHER_POLICY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../third_party/policies/pusher_policy.onnx"
     )
     set_property(TARGET ferro_cascade APPEND PROPERTY BUILD_RPATH "${FERRO_ONNXRUNTIME_DIR}/lib")
     if(APPLE)
         set_property(TARGET ferro_cascade APPEND PROPERTY BUILD_RPATH "${FERRO_MUJOCO_LIBDIR}")
+    endif()
+
+    add_executable(task_obs_test src/task_obs_test.cpp)
+    target_include_directories(task_obs_test PRIVATE "${MUJOCO_INCLUDE_DIR}")
+    target_link_libraries(task_obs_test PRIVATE "${MUJOCO_LIBRARY}")
+    target_compile_definitions(task_obs_test PRIVATE
+        INVERTED_PENDULUM_PATH="${INVERTED_PENDULUM_PATH}"
+        POLICY_PATH="${POLICY_PATH}"
+        PUSHER_MODEL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../third_party/models/pusher.xml"
+        PUSHER_POLICY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../third_party/policies/pusher_policy.onnx"
+    )
+    if(APPLE)
+        set_property(TARGET task_obs_test APPEND PROPERTY BUILD_RPATH "${FERRO_MUJOCO_LIBDIR}")
     endif()
 
     add_executable(ferro_eval src/eval.cpp)
@@ -174,6 +189,8 @@ if(CARGO_EXECUTABLE)
     add_dependencies(ferro_core rust_sidecar_build)
     target_link_libraries(ferro_core PRIVATE
         "${FERRO_RUST_LIB}" ${FERRO_RUST_SYS_LIBS} Threads::Threads)
+    add_dependencies(ferro_cascade rust_sidecar_build)
+    target_link_libraries(ferro_cascade PRIVATE "${FERRO_RUST_LIB}" ${FERRO_RUST_SYS_LIBS})
 
     add_executable(sidecar_link_test src/sidecar_link_test.cpp)
     add_dependencies(sidecar_link_test rust_sidecar_build)
