@@ -26,13 +26,10 @@ int main(int argc, char** argv) {
     Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "ferro");
     Ort::Session session(env, policy_path, Ort::SessionOptions{});
 
-    // static asserts can't catch a policy width that disagrees with kObsDim
-    auto input_dims = session.GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
-    validate_obs_dim(static_cast<size_t>(input_dims.back()));
-
     {
         Model model(model_path);
         Data data(model);
+        validate_record_dims(model.get()->nq, model.get()->nu);
 
         LatencyRecorder inference(num_steps);
         LatencyRecorder tick_work(num_steps);
@@ -68,7 +65,7 @@ int main(int argc, char** argv) {
         ring.control.tail.store(0, std::memory_order_relaxed);
         ring.control.capacity = kRingCapacity;
         ring.control.record_size = sizeof(TickRecord);
-        ring.control.obs_dim = kObsDim;
+        ring.control.qpos_capacity = kMaxQposDim;
 
         SidecarConsumer sidecar(&ring);
 
@@ -123,8 +120,10 @@ int main(int argc, char** argv) {
             rec.tick = i;
             rec.timestamp_ns =
                 duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
-            std::copy(obs.begin(), obs.end(), rec.obs);
-            rec.action = action_data[0];
+            rec.qpos_dim = static_cast<uint16_t>(model.get()->nq);
+            rec.action_dim = static_cast<uint16_t>(model.get()->nu);
+            for (int j = 0; j < model.get()->nq; j++) rec.qpos[j] = (float)data.get()->qpos[j];
+            rec.action[0] = action_data[0];
             rec.inference_ns = static_cast<uint32_t>(duration_cast<nanoseconds>(inf_elapsed).count());
             rec.tick_work_ns = static_cast<uint32_t>(duration_cast<nanoseconds>(tick_elapsed).count());
 

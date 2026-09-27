@@ -11,16 +11,21 @@
 // asserts at the bottom must match the ones there.
 
 constexpr uint32_t kRingCapacity = 1024;  // power of two
-constexpr uint32_t kObsDim = 4;           // matches InvertedPendulum
+constexpr uint32_t kMaxQposDim = 16;
+constexpr uint32_t kMaxActionDim = 8;
 
+// Simulator state and command per tick, enough to replay or render a run.
+// Two cache lines.
 struct TickRecord {
     uint64_t tick;
     uint64_t timestamp_ns;
-    float obs[kObsDim];
-    float action;
     uint32_t inference_ns;
     uint32_t tick_work_ns;
-    uint32_t _pad[5];
+    uint16_t qpos_dim;
+    uint16_t action_dim;
+    uint32_t _pad;
+    float qpos[kMaxQposDim];
+    float action[kMaxActionDim];
 };
 
 // head and tail sit on separate cache lines so the producer storing head does
@@ -30,7 +35,7 @@ struct RingControl {
     alignas(64) std::atomic<uint64_t> tail;  // consumer writes, producer reads
     alignas(64) uint32_t capacity;
     uint32_t record_size;
-    uint32_t obs_dim;  // what the producer actually writes, for the consumer to check
+    uint32_t qpos_capacity;
 };
 
 struct TickRing {
@@ -38,25 +43,26 @@ struct TickRing {
     TickRecord slots[kRingCapacity];
 };
 
-static_assert(sizeof(TickRecord) == 64, "TickRecord must stay one cache line");
-static_assert(offsetof(TickRecord, obs) == 16, "");
-static_assert(offsetof(TickRecord, action) == 32, "");
-static_assert(offsetof(TickRecord, inference_ns) == 36, "");
+static_assert(sizeof(TickRecord) == 128, "TickRecord must stay two cache lines");
+static_assert(offsetof(TickRecord, inference_ns) == 16, "");
+static_assert(offsetof(TickRecord, qpos_dim) == 24, "");
+static_assert(offsetof(TickRecord, qpos) == 32, "");
+static_assert(offsetof(TickRecord, action) == 96, "");
 static_assert(sizeof(RingControl) == 192, "");
 static_assert(offsetof(RingControl, tail) == 64, "");
 static_assert(offsetof(RingControl, capacity) == 128, "");
-static_assert(offsetof(RingControl, obs_dim) == 136, "");
-static_assert(sizeof(TickRing) == 192 + 64 * kRingCapacity, "");
+static_assert(offsetof(RingControl, qpos_capacity) == 136, "");
+static_assert(sizeof(TickRing) == 192 + 128 * kRingCapacity, "");
 static_assert(std::atomic<uint64_t>::is_always_lock_free,
               "ring requires lock-free 64-bit atomics");
 
-// The static asserts catch a one-sided layout edit but not a policy whose
-// observation width differs from kObsDim. Call once at startup with the width
-// the loaded ONNX model actually expects.
-inline void validate_obs_dim(size_t actual) {
-    if (actual != kObsDim) {
-        throw std::runtime_error("policy observation width " + std::to_string(actual) +
-                                 " does not match kObsDim " + std::to_string(kObsDim));
+// Static asserts fix the record size but cannot see the loaded model, so check
+// once at startup that its state and command fit.
+inline void validate_record_dims(int nq, int nu) {
+    if (nq > static_cast<int>(kMaxQposDim) || nu > static_cast<int>(kMaxActionDim)) {
+        throw std::runtime_error("model nq=" + std::to_string(nq) + " nu=" + std::to_string(nu) +
+                                 " exceeds record capacity " + std::to_string(kMaxQposDim) + "/" +
+                                 std::to_string(kMaxActionDim));
     }
 }
 

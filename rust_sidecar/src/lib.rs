@@ -2,6 +2,9 @@
 
 pub mod record;
 pub mod stats;
+pub mod trajectory;
+
+use std::ffi::{CStr, c_char};
 
 /// Ring size this crate was compiled against. The C++ side compares it to its
 /// own sizeof to catch the two being built against different layout versions,
@@ -46,27 +49,71 @@ pub unsafe extern "C" fn ferro_sidecar_stats_dropped(stats: *const stats::Sideca
     unsafe { (*stats).dropped }
 }
 
-/// Pops everything currently available, accumulating into `stats`. Returns the
-/// number of records consumed.
+/// Returns null if the file cannot be created.
 ///
 /// # Safety
-/// Same contract as `ferro_sidecar_pop`, plus `stats` must be a live pointer
-/// from `ferro_sidecar_stats_new`.
+/// `path` must be a valid NUL-terminated string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ferro_sidecar_drain(
+pub unsafe extern "C" fn ferro_sidecar_trajectory_open(
+    path: *const c_char,
+) -> *mut trajectory::Trajectory {
+    let Ok(path) = unsafe { CStr::from_ptr(path) }.to_str() else {
+        return std::ptr::null_mut();
+    };
+    match trajectory::Trajectory::create(path) {
+        Ok(t) => Box::into_raw(Box::new(t)),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Flushes and frees.
+///
+/// # Safety
+/// `t` must have come from `ferro_sidecar_trajectory_open` and not been freed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ferro_sidecar_trajectory_close(t: *mut trajectory::Trajectory) {
+    if !t.is_null() {
+        let mut t = unsafe { Box::from_raw(t) };
+        let _ = t.flush();
+    }
+}
+
+/// Pops everything currently available, accumulating into `stats` and writing
+/// each record to `traj` if it is non-null. Returns the number consumed.
+///
+/// # Safety
+/// Same contract as `ferro_sidecar_pop`. `stats` must be live, and `traj`
+/// either null or live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ferro_sidecar_drain_to(
     ring: *const record::TickRing,
     stats: *mut stats::SidecarStats,
+    traj: *mut trajectory::Trajectory,
 ) -> u64 {
     let stats = unsafe { &mut *stats };
+    let mut traj = unsafe { traj.as_mut() };
     let mut rec = record::TickRecord::default();
     let mut consumed = 0;
 
     while unsafe { ferro_sidecar_pop(ring, &mut rec) } {
         stats.record(&rec);
+        if let Some(t) = traj.as_deref_mut() {
+            let _ = t.write(&rec);
+        }
         consumed += 1;
     }
 
     consumed
+}
+
+/// # Safety
+/// Same contract as `ferro_sidecar_drain_to` with no trajectory.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ferro_sidecar_drain(
+    ring: *const record::TickRing,
+    stats: *mut stats::SidecarStats,
+) -> u64 {
+    unsafe { ferro_sidecar_drain_to(ring, stats, std::ptr::null_mut()) }
 }
 
 /// # Safety

@@ -32,16 +32,18 @@ int main() {
     ring.control.tail.store(0, std::memory_order_relaxed);
     ring.control.capacity = kRingCapacity;
     ring.control.record_size = sizeof(TickRecord);
-    ring.control.obs_dim = kObsDim;
+    ring.control.qpos_capacity = kMaxQposDim;
 
     TickRecord sent{};
     sent.tick = 42;
     sent.timestamp_ns = 123456789;
-    sent.obs[0] = 1.0f;
-    sent.obs[1] = 2.0f;
-    sent.obs[2] = 3.0f;
-    sent.obs[3] = 4.0f;
-    sent.action = 0.5f;
+    sent.qpos_dim = 4;
+    sent.action_dim = 1;
+    sent.qpos[0] = 1.0f;
+    sent.qpos[1] = 2.0f;
+    sent.qpos[2] = 3.0f;
+    sent.qpos[3] = 4.0f;
+    sent.action[0] = 0.5f;
     sent.inference_ns = 100;
     sent.tick_work_ns = 200;
 
@@ -61,10 +63,10 @@ int main() {
         std::printf("MISMATCH: received record differs from what was sent\n");
         return 1;
     }
-    std::printf("popped tick %llu, obs=[%.1f, %.1f, %.1f, %.1f], action=%.1f\n",
+    std::printf("popped tick %llu, qpos=[%.1f, %.1f, %.1f, %.1f], action=%.1f\n",
                 static_cast<unsigned long long>(received.tick),
-                received.obs[0], received.obs[1], received.obs[2], received.obs[3],
-                received.action);
+                received.qpos[0], received.qpos[1], received.qpos[2], received.qpos[3],
+                received.action[0]);
 
     // Ring should be empty again now.
     TickRecord unused{};

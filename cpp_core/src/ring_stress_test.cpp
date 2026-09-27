@@ -20,10 +20,14 @@ TickRecord make_record(uint64_t tick) {
     TickRecord r{};
     r.tick = tick;
     r.timestamp_ns = tick * 1000;
-    for (uint32_t i = 0; i < kObsDim; ++i) {
-        r.obs[i] = static_cast<float>(tick % 1000) + static_cast<float>(i);
+    r.qpos_dim = kMaxQposDim;
+    r.action_dim = kMaxActionDim;
+    for (uint32_t i = 0; i < kMaxQposDim; ++i) {
+        r.qpos[i] = static_cast<float>(tick % 1000) + static_cast<float>(i);
     }
-    r.action = static_cast<float>(tick % 997);
+    for (uint32_t i = 0; i < kMaxActionDim; ++i) {
+        r.action[i] = static_cast<float>(tick % 997) + static_cast<float>(i);
+    }
     r.inference_ns = static_cast<uint32_t>(tick % 100000);
     r.tick_work_ns = static_cast<uint32_t>(tick % 50000);
     return r;
@@ -35,7 +39,7 @@ int main() {
     static TickRing ring{};
     ring.control.capacity = kRingCapacity;
     ring.control.record_size = sizeof(TickRecord);
-    ring.control.obs_dim = kObsDim;
+    ring.control.qpos_capacity = kMaxQposDim;
 
     std::atomic<uint64_t> full_retries{0};
     auto start = std::chrono::steady_clock::now();

@@ -80,12 +80,9 @@ mod tests {
     fn rec(tick: u64, inference_ns: u32, tick_work_ns: u32) -> TickRecord {
         TickRecord {
             tick,
-            timestamp_ns: 0,
-            obs: [0.0; crate::record::OBS_DIM],
-            action: 0.0,
             inference_ns,
             tick_work_ns,
-            _pad: [0; 5],
+            ..Default::default()
         }
     }
 
