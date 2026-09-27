@@ -16,3 +16,8 @@ target/
 training/.venv/
 __pycache__/
 *.pyc
+
+# Training artifacts
+training/checkpoints/
+training/pusher_sac.zip
+training/pusher_policy*.onnx
