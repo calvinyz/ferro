@@ -6,6 +6,17 @@ The policy thread does not read `mjData`, because the control loop is mutating
 it and a mutex would let a slow policy stall the control loop, so state goes out
 through a channel instead. Neither channel ever blocks its reader.
 
+## Tasks
+
+`tasks.h` defines each task's reset and observation to mirror the gymnasium env
+its policy was trained on. `task_obs_test` and `training/check_obs_parity.py`
+apply a random control to a random state for one env step in both and compare
+the observations, currently within 5e-7.
+
+Stepping is what makes the check useful. An earlier version compared
+observations on static states and passed while the C++ side loaded the pre-v5
+Pusher model, whose puck is 1000x less dense, so the arm could not move it.
+
 ## Ring
 
 Push drops when full rather than overwriting or blocking, so a full ring costs
@@ -16,8 +27,9 @@ Head and tail are unbounded counters, wrapped only when indexing, so
 of 1024 with no sacrificial slot. Running 1500 ticks with no consumer attached
 drops exactly 476 records, which confirms the accounting.
 
-`alignas(64)` puts head and tail on separate cache lines, and `TickRecord` is
-asserted at 64 bytes.
+`alignas(64)` puts head and tail on separate cache lines. `TickRecord` carries
+the tick's `qpos` and command and is asserted at 128 bytes, two cache lines,
+enough for the pusher's 11 positions and 7 actions.
 
 Release on the head store publishes the slot and acquire on the tail load
 confirms the consumer is done with it, so head ordering keeps the consumer from
@@ -31,9 +43,9 @@ Drops are inferred from gaps in the tick sequence rather than a shared counter.
 `cpp_core/src/tick_record.h` and `rust_sidecar/src/record.rs` describe the same
 bytes, both with static assertions on struct size and field offsets, and
 `ferro_sidecar_ring_size()` compares `sizeof(TickRing)` at runtime to catch the
-two sides being built against different layout versions. Static assertions do
-not cover a policy whose observation width differs from `kObsDim`, so
-`validate_obs_dim` checks the loaded ONNX model at startup.
+two sides being built against different layout versions. Static assertions
+cannot see the loaded model, so `validate_record_dims` checks at startup that
+its state and command fit the record.
 
 The end-to-end check is that producer and consumer report the same latency
 statistics over 1500 records, one computed in C++ from local variables and one
@@ -72,6 +84,13 @@ Commands carry their publish time, and the control loop reads the latest one
 each tick and computes its age, decaying the held action toward zero once it is
 older than three policy periods. Killing the policy thread mid-run gives 3851
 fallback ticks, a worst command age of 3.97s, and zero missed deadlines.
+
+## Trajectories
+
+Given `--trajectory`, the sidecar writes every record it pops to CSV, and
+`training/render_trajectory.py` later replays the logged `qpos` through MuJoCo
+to render frames. File I/O stays on the sidecar thread and never touches the
+control loop.
 
 ## Dependencies
 
