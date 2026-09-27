@@ -38,7 +38,7 @@ def evaluate(model, episodes=10):
             total += r
             done = term or trunc
         returns.append(total)
-        final_dists.append(float(np.linalg.norm(obs[17:20] - obs[20:23])))
+        final_dists.append(float(np.linalg.norm(obs[17:19] - obs[20:22])))
     return float(np.mean(returns)), float(np.mean(final_dists))
 
 
