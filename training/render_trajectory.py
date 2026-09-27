@@ -11,7 +11,7 @@ import mujoco
 import numpy as np
 
 CAMERAS = {
-    "pusher": dict(lookat=(0.3, -0.25, -0.3), distance=1.35, azimuth=135, elevation=-40),
+    "pusher": dict(lookat=(0.3, -0.3, -0.3), distance=1.6, azimuth=180, elevation=-50),
     "cartpole": dict(lookat=(0.0, 0.0, 0.2), distance=2.2, azimuth=90, elevation=-10),
 }
 
