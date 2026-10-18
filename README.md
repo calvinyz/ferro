@@ -35,18 +35,19 @@ ticks, so a tight loop reports 5.0us for a call that costs 85.4us at 50 Hz.
 That is 17x on Apple Silicon and 2x on x86, and core migration and frequency
 scaling are both plausible causes.
 
-Injecting 5 ms stalls into the policy thread on the Mac, at 1 kHz control and
-25 Hz policy, nearly tripled inference latency without moving control timing:
+Delaying every tenth policy command by 100 ms, at 1 kHz control on the Mac,
+raised sensor-to-actuation latency 50x without moving control timing:
 
-| | no stall | stalls |
+| pusher arm | no stall | 100 ms stalls |
 |---|---|---|
-| inference max | 376us | 969us |
-| control tick p99 | 35.4us | 35.5us |
+| policy latency p99 | 2.0 ms | 102 ms |
+| control tick p99 | 45.3us | 45.5us |
 | missed deadlines | 0 | 0 |
+| final object to goal | 0.3 cm | 0.3 cm |
 
-Running the same test on r11 and changing only `SCHED_FIFO` against default
-priority moved control period min/max from 590/1408us to 997/1006us, so
-scheduling accounts for most of the remaining jitter.
+On r11, changing only `SCHED_FIFO` against default priority moved control period
+min/max from 590/1408us to 997/1006us, so scheduling accounts for most of the
+remaining jitter.
 
 Telemetry push costs 0.5us per tick at p50 and 4us at p99.
 

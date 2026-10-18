@@ -14,6 +14,7 @@ struct Target {
     uint64_t policy_tick;
     uint64_t published_ns;
     uint64_t compute_ns;  // inference time that produced this command
+    uint64_t source_ns;   // when the state it was computed from was published
     float value[kMaxTargetDim];
 };
 

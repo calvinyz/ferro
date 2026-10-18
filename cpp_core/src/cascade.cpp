@@ -41,7 +41,7 @@ struct Args {
     int ticks = 5000;
     int control_us = 1000;  // 1 kHz
     int policy_us = 0;      // 0 means the task's trained rate
-    int stall_ms = 0;       // injected policy stall every 10 cycles
+    int stall_ms = 0;       // delay before publishing every 10th command
     int die_after = 0;      // policy thread exits after N cycles
     uint32_t seed = 0;
     const char* trajectory = nullptr;
@@ -72,7 +72,8 @@ int main(int argc, char** argv) {
     const TaskSpec& task = tasks::find(args.task);
     const int policy_us = args.policy_us > 0 ? args.policy_us : task.policy_us;
 
-    // Command older than this falls back rather than driving the actuator.
+    // Command computed from state older than this falls back rather than
+    // driving the actuator.
     const uint64_t max_age_ns = static_cast<uint64_t>(policy_us) * 1000 * 3;
 
     Model model(task.model_path);
@@ -127,6 +128,7 @@ int main(int argc, char** argv) {
     LatencyRecorder control_tick(args.ticks);
     LatencyRecorder control_period(args.ticks);
     LatencyRecorder inference(args.ticks / std::max(1, policy_us / args.control_us) + 16);
+    LatencyRecorder policy_latency(args.ticks / std::max(1, policy_us / args.control_us) + 16);
 
     uint64_t reused_ticks = 0;
     uint64_t fallback_ticks = 0;
@@ -163,18 +165,20 @@ int main(int argc, char** argv) {
                 auto elapsed = steady_clock::now() - t0;
                 inference.record(elapsed);
 
+                // Deliberate stall before publishing, standing in for slow
+                // inference, to show control timing is unaffected by it.
+                if (args.stall_ms > 0 && (cycle + 1) % 10 == 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(args.stall_ms));
+                }
+
                 Target cmd{};
                 cmd.policy_tick = ++cycle;
                 cmd.published_ns = now_ns();
+                cmd.source_ns = state.published_ns;
                 cmd.compute_ns = duration_cast<nanoseconds>(elapsed).count();
                 const float* a = out[0].GetTensorData<float>();
                 std::copy(a, a + task.act_dim, cmd.value);
                 cmd_ch.publish(cmd);
-            }
-
-            // Deliberate stall, to show control timing is unaffected by it.
-            if (args.stall_ms > 0 && cycle % 10 == 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(args.stall_ms));
             }
 
             std::this_thread::sleep_until(next);
@@ -206,7 +210,7 @@ int main(int argc, char** argv) {
 
         Target cmd{};
         if (cmd_ch.try_read(cmd) && cmd.policy_tick > 0) {
-            uint64_t age = now_ns() - cmd.published_ns;
+            uint64_t age = now_ns() - cmd.source_ns;
             max_age_seen = std::max(max_age_seen, age);
 
             if (age > max_age_ns) {
@@ -216,7 +220,11 @@ int main(int argc, char** argv) {
             } else {
                 std::copy(cmd.value, cmd.value + task.act_dim, held);
                 last_compute_ns = cmd.compute_ns;
-                if (cmd.policy_tick == last_cmd_tick) reused_ticks++;
+                if (cmd.policy_tick == last_cmd_tick) {
+                    reused_ticks++;
+                } else {
+                    policy_latency.record(nanoseconds(age));
+                }
                 last_cmd_tick = cmd.policy_tick;
             }
         }
@@ -265,6 +273,7 @@ int main(int argc, char** argv) {
     print_latency("control_tick", control_tick.stats());
     print_latency("control_period", control_period.stats());
     print_latency("inference", inference.stats());
+    print_latency("policy_latency", policy_latency.stats());
 
     std::printf("policy cycles     : %llu\n", (unsigned long long)cmd_ch.publications());
     std::printf("reused command    : %llu / %d ticks\n", (unsigned long long)reused_ticks,

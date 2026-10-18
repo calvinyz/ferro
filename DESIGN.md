@@ -80,9 +80,11 @@ now sets itself to `SCHED_OTHER`.
 
 ## Stale commands
 
-Commands carry their publish time, and the control loop reads the latest one
-each tick and computes its age, decaying the held action toward zero once it is
-older than three policy periods. Killing the policy thread mid-run gives 3851
+Each command carries the publish time of the state it was computed from, and
+the control loop reads the latest one each tick and computes its age, decaying
+the held action toward zero once it is older than three policy periods. Age is
+measured from the state rather than the command, since a command computed from
+old state is stale even if it was just published. Killing the policy thread mid-run gives 3851
 fallback ticks, a worst command age of 3.97s, and zero missed deadlines.
 
 ## Trajectories
