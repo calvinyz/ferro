@@ -208,3 +208,17 @@ if(CARGO_EXECUTABLE)
 else()
     message(WARNING "cargo not found, skipping Rust sidecar targets")
 endif()
+
+# --- ROS 2 bridge (optional) -------------------------------------------------
+# Builds into ferro_cascade only when a ROS 2 environment is sourced.
+find_package(rclcpp QUIET)
+find_package(sensor_msgs QUIET)
+find_package(std_msgs QUIET)
+if(rclcpp_FOUND AND sensor_msgs_FOUND AND std_msgs_FOUND)
+    target_compile_definitions(ferro_cascade PRIVATE FERRO_WITH_ROS)
+    target_link_libraries(ferro_cascade PRIVATE
+        rclcpp::rclcpp ${sensor_msgs_TARGETS} ${std_msgs_TARGETS})
+    message(STATUS "ROS 2 bridge: enabled")
+else()
+    message(STATUS "ROS 2 bridge: disabled (no ROS 2 environment)")
+endif()

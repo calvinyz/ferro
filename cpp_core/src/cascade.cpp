@@ -12,6 +12,7 @@
 #include "target_channel.h"
 #include "tasks.h"
 #include "tick_record.h"
+#include "ros_bridge.h"
 
 #include <algorithm>
 #include <atomic>
@@ -21,6 +22,7 @@
 #include <cstring>
 #include <mujoco/mujoco.h>
 #include <onnxruntime_cxx_api.h>
+#include <memory>
 #include <random>
 #include <string>
 #include <thread>
@@ -45,6 +47,7 @@ struct Args {
     int die_after = 0;      // policy thread exits after N cycles
     uint32_t seed = 0;
     const char* trajectory = nullptr;
+    int ros_hz = 0;  // publish to ROS 2 at this rate, 0 disables
 };
 
 Args parse(int argc, char** argv) {
@@ -60,6 +63,7 @@ Args parse(int argc, char** argv) {
         else if (k == "--die-after") a.die_after = std::atoi(v);
         else if (k == "--seed") a.seed = static_cast<uint32_t>(std::atoi(v));
         else if (k == "--trajectory") a.trajectory = v;
+        else if (k == "--ros-hz") a.ros_hz = std::atoi(v);
         else throw std::runtime_error("unknown flag " + k);
     }
     return a;
@@ -67,7 +71,7 @@ Args parse(int argc, char** argv) {
 
 }  // namespace
 
-int main(int argc, char** argv) {
+int run(int argc, char** argv) {
     Args args = parse(argc, argv);
     const TaskSpec& task = tasks::find(args.task);
     const int policy_us = args.policy_us > 0 ? args.policy_us : task.policy_us;
@@ -103,6 +107,17 @@ int main(int argc, char** argv) {
 
     TargetChannel obs_ch;
     TargetChannel cmd_ch;
+    TargetChannel state_ch;  // qpos then qvel, read by the ROS bridge
+
+    if (m->nq + m->nv > (int)kMaxTargetDim) throw std::runtime_error("state exceeds channel capacity");
+    const bool publish_state = args.ros_hz > 0;
+
+#ifdef FERRO_WITH_ROS
+    std::unique_ptr<RosBridge> ros;
+    if (publish_state) ros = std::make_unique<RosBridge>(m, state_ch, cmd_ch, task.act_dim, args.ros_hz);
+#else
+    if (publish_state) throw std::runtime_error("--ros-hz needs a build with ROS 2");
+#endif
 
     // Seed the observation channel so the policy's first cycle has a state.
     Target first{};
@@ -238,6 +253,15 @@ int main(int argc, char** argv) {
         task.observe(m, d, state.value);
         obs_ch.publish(state);
 
+        if (publish_state) {
+            Target st{};
+            st.policy_tick = static_cast<uint64_t>(i) + 1;
+            st.published_ns = state.published_ns;
+            for (int j = 0; j < m->nq; j++) st.value[j] = (float)d->qpos[j];
+            for (int j = 0; j < m->nv; j++) st.value[m->nq + j] = (float)d->qvel[j];
+            state_ch.publish(st);
+        }
+
         auto tick_elapsed = steady_clock::now() - tick_start;
         control_tick.record(tick_elapsed);
 
@@ -286,4 +310,13 @@ int main(int argc, char** argv) {
     if (args.trajectory) std::printf("trajectory        : %s\n", args.trajectory);
 
     return 0;
+}
+
+int main(int argc, char** argv) {
+    try {
+        return run(argc, argv);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "error: %s\n", e.what());
+        return 1;
+    }
 }
