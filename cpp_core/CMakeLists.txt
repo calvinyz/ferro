@@ -71,6 +71,11 @@ if(NOT FERRO_ONNXRUNTIME_DIR)
     endif()
 endif()
 
+# A copy vendored by fetch_onnxruntime.sh, CPU or GPU, has the same layout.
+if(FERRO_ONNXRUNTIME_DIR MATCHES "/third_party/onnxruntime")
+    set(FERRO_ONNXRUNTIME_VENDORED ON)
+endif()
+
 if(FERRO_ONNXRUNTIME_DIR AND EXISTS "${FERRO_ONNXRUNTIME_DIR}")
     message(STATUS "ONNX Runtime: ${FERRO_ONNXRUNTIME_DIR}")
 
@@ -123,6 +128,10 @@ if(FERRO_ONNXRUNTIME_DIR AND EXISTS "${FERRO_ONNXRUNTIME_DIR}")
     if(APPLE)
         set_property(TARGET task_obs_test APPEND PROPERTY BUILD_RPATH "${FERRO_MUJOCO_LIBDIR}")
     endif()
+
+    add_executable(inference_bench src/inference_bench.cpp)
+    target_link_libraries(inference_bench PRIVATE onnxruntime::onnxruntime)
+    set_property(TARGET inference_bench APPEND PROPERTY BUILD_RPATH "${FERRO_ONNXRUNTIME_DIR}/lib")
 
     add_executable(ferro_eval src/eval.cpp)
     target_include_directories(ferro_eval PRIVATE "${MUJOCO_INCLUDE_DIR}")

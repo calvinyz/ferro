@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Vendors the official ONNX Runtime release into third_party/onnxruntime.
 # Pinned to the same version across platforms so cross-platform latency
-# numbers stay comparable. Idempotent; pass --force to re-fetch.
+# numbers stay comparable. Idempotent; pass --force to re-fetch. Pass --gpu
+# for the CUDA 13 build in third_party/onnxruntime-gpu (Linux x86_64 only).
 set -euo pipefail
 
 ORT_VERSION="1.29.0"
@@ -11,7 +12,15 @@ WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 FORCE=0
-[[ "${1:-}" == "--force" ]] && FORCE=1
+GPU=0
+for arg in "$@"; do
+    case "$arg" in
+        --force) FORCE=1 ;;
+        --gpu) GPU=1 ;;
+        *) echo "unknown argument $arg" >&2; exit 1 ;;
+    esac
+done
+[[ "$GPU" -eq 1 ]] && VENDOR_DIR="$REPO_ROOT/third_party/onnxruntime-gpu"
 
 if [[ -d "$VENDOR_DIR" && "$FORCE" -eq 0 ]]; then
     echo "ONNX Runtime already vendored at $VENDOR_DIR (use --force to re-fetch)"
@@ -28,6 +37,12 @@ case "$OS/$ARCH" in
     *) echo "unsupported platform: $OS/$ARCH" >&2; exit 1 ;;
 esac
 
+if [[ "$GPU" -eq 1 ]]; then
+    [[ "$OS/$ARCH" == "Linux/x86_64" ]] || { echo "--gpu needs Linux x86_64" >&2; exit 1; }
+    SLUG="linux-x64-gpu_cuda13"
+    SHA256="844c64acfc43ab9423215c26493055ea229268e28283146cc644ecef0bdae048"
+fi
+
 ASSET="onnxruntime-${SLUG}-${ORT_VERSION}.tgz"
 URL="https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/${ASSET}"
 
@@ -40,7 +55,7 @@ else
 fi
 
 tar xzf "$WORK_DIR/$ASSET" -C "$WORK_DIR"
-EXTRACTED="$WORK_DIR/onnxruntime-${SLUG}-${ORT_VERSION}"
+EXTRACTED="$(find "$WORK_DIR" -mindepth 1 -maxdepth 1 -type d -name 'onnxruntime-*' | head -1)"
 
 rm -rf "$VENDOR_DIR"
 mkdir -p "$VENDOR_DIR"
