@@ -94,6 +94,20 @@ Given `--trajectory`, the sidecar writes every record it pops to CSV, and
 to render frames. File I/O stays on the sidecar thread and never touches the
 control loop.
 
+## ROS 2 bridge
+
+ROS 2 publishing allocates and goes through DDS, so it is not real-time safe and
+stays off the control loop. The control loop publishes `qpos` and `qvel` to a
+third latest-value channel, only when the bridge is enabled, and a separate
+thread reads it and the command channel at its own rate. A seqlock supports
+any number of readers and never blocks the writer, which is why the bridge can
+watch both channels without affecting control timing. The bridge thread sets
+itself to `SCHED_OTHER` for the same inheritance reason as the sidecar.
+
+The container runs as the host user, with `SYS_NICE` and an `rtprio` limit, so
+the control thread still gets `SCHED_FIFO` inside it and build output in the
+mounted repo is not owned by root.
+
 ## Dependencies
 
 On macOS the MuJoCo dylib is lifted out of its framework, its install name

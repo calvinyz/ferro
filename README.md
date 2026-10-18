@@ -51,6 +51,10 @@ remaining jitter.
 
 Telemetry push costs 0.5us per tick at p50 and 4us at p99.
 
+Publishing `/joint_states` to a live ROS 2 subscriber at up to 1 kHz had no
+measurable effect on the control loop. Over four runs each, control p99 ranged
+41-53us with the bridge and 45-66us without, all with zero missed deadlines.
+
 Python holds 50 Hz but misses 37 of 2000 deadlines at 1 kHz with a worst tick of
 8972us, and disabling the GC halves the work tail without changing wake
 lateness.
@@ -68,6 +72,8 @@ deadlines across 100,000 ticks.
 - **ONNX Runtime** for inference, so the policy is independent of the framework
   that trained it.
 - **CMake** driving both, including the cargo build.
+- **ROS 2** (optional) for a bridge that publishes `/joint_states` and
+  `/ferro/command`, built only when a ROS 2 environment is sourced.
 
 ```
 +---------------------+   obs_ch (seqlock)   +---------------------+
@@ -75,9 +81,15 @@ deadlines across 100,000 ticks.
 |  1 kHz, RT priority |                      |  20-25 Hz           |
 |  MuJoCo mj_step     | <------------------- |  ONNX Runtime       |
 +---------------------+   cmd_ch (seqlock)   +---------------------+
-          |
-          | tick_ring (SPSC FIFO, drops on full)
-          v
+     |           |
+     |           | state_ch (seqlock, optional)
+     |           v
+     |     +---------------------+
+     |     |  ROS 2 bridge       |  /joint_states, /ferro/command
+     |     +---------------------+
+     |
+     | tick_ring (SPSC FIFO, drops on full)
+     v
 +---------------------+
 |  Rust sidecar       |
 |  telemetry consumer |
@@ -116,6 +128,10 @@ uv run python render_trajectory.py ../run.csv ../third_party/models/pusher.xml r
 Tests are `target_channel_test`, `ring_stress_test`, `sidecar_link_test`,
 `cargo test` in `rust_sidecar/`, and `training/check_obs_parity.py`, which checks
 the C++ tasks against gymnasium.
+
+To run with the ROS 2 bridge on Linux, `scripts/ros.sh build` and then
+`scripts/ros.sh run --task pusher --ros-hz 100`, which builds and runs inside a
+`ros:jazzy` container.
 
 `SCHED_FIFO` on Linux needs `sudo setcap cap_sys_nice+ep` on the binary, and
 rebuilding clears it.
