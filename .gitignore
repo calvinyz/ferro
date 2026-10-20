@@ -24,3 +24,4 @@ training/pusher_sac.zip
 training/pusher_policy*.onnx
 third_party/onnxruntime-gpu/
 bench/models/
+bench/runs/

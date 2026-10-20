@@ -267,7 +267,7 @@ int run(int argc, char** argv) {
 
         TickRecord rec{};
         rec.tick = static_cast<uint64_t>(i);
-        rec.timestamp_ns = now_ns();
+        rec.timestamp_ns = duration_cast<nanoseconds>(tick_start.time_since_epoch()).count();
         rec.inference_ns = static_cast<uint32_t>(last_compute_ns);
         rec.tick_work_ns = static_cast<uint32_t>(duration_cast<nanoseconds>(tick_elapsed).count());
         rec.qpos_dim = static_cast<uint16_t>(m->nq);

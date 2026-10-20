@@ -45,9 +45,12 @@ raised sensor-to-actuation latency 50x without moving control timing:
 | missed deadlines | 0 | 0 |
 | final object to goal | 0.3 cm | 0.3 cm |
 
-On r11, changing only `SCHED_FIFO` against default priority moved control period
-min/max from 590/1408us to 997/1006us, so scheduling accounts for most of the
-remaining jitter.
+![Tick intervals at 1 kHz, default priority vs SCHED_FIFO, idle vs loaded](docs/period_jitter.png)
+
+`SCHED_FIFO` matters once the CPU is contended. On an idle machine both policies
+hold 1 kHz with no missed deadlines. With all 20 cores saturated, default
+priority missed 40 of 10,000 deadlines with a worst tick of 4.3 ms, while
+`SCHED_FIFO` missed none and kept 99.9% of ticks within 1us of the period.
 
 Telemetry push costs 0.5us per tick at p50 and 4us at p99.
 
