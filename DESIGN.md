@@ -108,6 +108,17 @@ The container runs as the host user, with `SYS_NICE` and an `rtprio` limit, so
 the control thread still gets `SCHED_FIFO` inside it and build output in the
 mounted repo is not owned by root.
 
+## Inference benchmark
+
+`inference_bench` runs one model at a fixed call period and times each
+`session.Run` with inputs and outputs in host memory, so CUDA timings include
+the transfers a control loop would pay. It disables ONNX Runtime's CPU fallback
+for CUDA runs, so a node the GPU cannot run fails instead of silently running on
+the CPU. Sweep models share the pusher policy's 23-input, 7-output shape and
+differ only in hidden width, with random weights, since serving cost does not
+depend on them. The GPU runs in a CUDA 13.2 container that carries its own
+cuDNN 9, because the host's cuDNN 8 is too old for ONNX Runtime 1.29.
+
 ## Dependencies
 
 On macOS the MuJoCo dylib is lifted out of its framework, its install name

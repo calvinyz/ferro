@@ -55,6 +55,21 @@ Publishing `/joint_states` to a live ROS 2 subscriber at up to 1 kHz had no
 measurable effect on the control loop. Over four runs each, control p99 ranged
 41-53us with the bridge and 45-66us without, all with zero missed deadlines.
 
+Whether a GPU helps depends on policy size. Same input and output shape as the
+pusher policy at six widths, on r11's i9-10900KF and RTX 3090, p50 at 1 kHz:
+
+| params | CPU | CUDA |
+|---|---|---|
+| 74k (pusher size) | 10us | 255us |
+| 4.3M | 92us | 347us |
+| 17M | 1344us | 298us |
+| 67M | 6716us | 476us |
+
+The GPU is 25x slower at the pusher's size, where launch and copy overhead
+dominate, and wins from about 17M parameters, which is also where CPU inference
+stops fitting a 1 kHz budget. Called at 50 Hz, CUDA settles near 650us at every
+size, about 10x its back-to-back latency. Full results are in `bench/results/`.
+
 Python holds 50 Hz but misses 37 of 2000 deadlines at 1 kHz with a worst tick of
 8972us, and disabling the GC halves the work tail without changing wake
 lateness.
@@ -125,6 +140,10 @@ cart-pole only. To render a logged run, from `training/`:
 uv run python render_trajectory.py ../run.csv ../third_party/models/pusher.xml run.gif --camera pusher
 ```
 
+For the CPU and GPU inference sweep on Linux with an NVIDIA GPU, run
+`fetch_onnxruntime.sh --gpu`, export models with `training/export_width_sweep.py`,
+then `scripts/cuda.sh build` and `scripts/cuda.sh sweep out.csv`.
+
 Tests are `target_channel_test`, `ring_stress_test`, `sidecar_link_test`,
 `cargo test` in `rust_sidecar/`, and `training/check_obs_parity.py`, which checks
 the C++ tasks against gymnasium.
@@ -140,8 +159,9 @@ rebuilding clears it.
 
 - Run the ring under ThreadSanitizer, since the stress test cannot check
   ordering.
-- Swap in a larger policy. The pusher's 75k-parameter MLP still infers in
-  under 100us, so the rate split is correct but not yet required.
+- Train a policy large enough to need the GPU. The sweep uses random weights,
+  and the trained pusher policy is small enough that the CPU is 25x faster.
+- Lock GPU clocks to test whether the 50 Hz CUDA floor comes from power states.
 - Train the pusher on a realistic puck. Pusher-v5's puck weighs 8 mg, so the
   gripper sinks into it in the GIF, and at 78 g the current policy misses by
   32 cm, meaning it learned to exploit the weightless puck.
